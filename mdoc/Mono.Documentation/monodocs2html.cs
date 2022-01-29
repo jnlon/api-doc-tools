@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Xsl;
 using System.Xml.XPath;
@@ -148,43 +149,49 @@ class MDocToHtmlConverter : MDocCommand {
 		typeargs.AddParam("basepath", "", "../");
 		typeargs.AddParam("Index", "", overview.CreateNavigator ());
 		
-		foreach (XmlElement ns in overview.SelectNodes("Overview/Types/Namespace")) {
+		foreach (XmlElement ns in overview.SelectNodes("Overview/Types/Namespace"))
+		//Parallel.ForEach(overview.SelectNodes("Overview/Types/Namespace").Cast<XmlElement>(), ns =>
+		{
 			string nsname = ns.GetAttribute("Name");
 
 			if (opts.onlytype != null && !opts.onlytype.StartsWith(nsname + "."))
-				continue;
-				
+				return;
+
 			System.IO.DirectoryInfo d = new System.IO.DirectoryInfo(opts.dest + "/" + nsname);
 			if (!d.Exists) d.Create();
-			
+
 			// Create the NS page
 			string nsDest = opts.dest + "/" + nsname + "/index." + opts.ext;
-			if (regenIndex) {
+			if (regenIndex)
+			{
 				overviewargs.AddParam("namespace", "", nsname);
 				Generate(overview, overviewxsl, overviewargs, nsDest, template, sourceDirectories);
 				overviewargs.RemoveParam("namespace", "");
 			}
-			
-			foreach (XmlElement ty in ns.SelectNodes("Type")) {
-				string typename, typefile, destfile;
-				GetTypePaths (opts, ty, out typename, out typefile, out destfile);
 
-				if (DestinationIsNewer (typefile, destfile))
+			//foreach (XmlElement ty in ns.SelectNodes("Type"))
+			Parallel.ForEach(ns.SelectNodes("Type").Cast<XmlElement>(), ty =>
+			{
+				string typename, typefile, destfile;
+				GetTypePaths(opts, ty, out typename, out typefile, out destfile);
+
+				if (DestinationIsNewer(typefile, destfile))
 					// target already exists, and is newer.  why regenerate?
-					continue;
+					return;
 
 				XmlDocument typexml = new XmlDocument();
 				typexml.Load(typefile);
-				PreserveMembersInVersions (typexml);
-				if (extensions != null) {
-					DocLoader loader = CreateDocLoader (overview);
-					XmlDocUtils.AddExtensionMethods (typexml, extensions, loader);
+				PreserveMembersInVersions(typexml);
+				if (extensions != null)
+				{
+					DocLoader loader = CreateDocLoader(overview);
+					XmlDocUtils.AddExtensionMethods(typexml, extensions, loader);
 				}
-				
+
 				Console.WriteLine(nsname + "." + typename);
-				
+
 				Generate(typexml, stylesheet, typeargs, destfile, template, sourceDirectories);
-			}
+			});
 		}
 	}
 
